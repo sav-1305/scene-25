@@ -3,66 +3,130 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pyramid Slots (Live)</title>
+  <title>🍺 Beer Pyramid</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: system-ui, Arial; margin: 0; padding: 24px; background:#fff; }
-    .wrap { max-width: 920px; margin: 0 auto; }
-    .pyramid { display:flex; flex-direction:column; gap:10px; align-items:center; }
-    .row { display:flex; gap:10px; justify-content:center; }
-    .slot { min-width:90px; padding:10px 12px; border:3px solid #f59e0b; background: #e8fbff; border-radius:6px; text-align:center; font-weight:700; }
-    .slot.empty { opacity:0.45; font-weight:500; color:#555; }
-    .meta { margin-bottom:14px; color:#333; }
+    body { font-family: system-ui, Arial; margin: 24px; background:#f9f9f9; }
+    .container { display: flex; flex-direction: row; gap: 40px; }
+    .sheet { flex: 1; }
+    .charts { flex: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    iframe { border: 1px solid #ccc; }
+    .chart-container { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 0 8px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="meta">Live pyramid from Google Sheets — auto-refreshes every 2s.</div>
-    <div id="pyramid" class="pyramid"></div>
+
+<h1>🍻 Beer Pyramid</h1>
+<div class="container">
+
+  <!-- Embedded Google Sheets Editable Pyramid Slots -->
+  <div class="sheet">
+    <h3>Edit Pyramid Slots</h3>
+    <iframe src="https://docs.google.com/spreadsheets/d/e/1uJchihmrhkQGgbjbIWAesfE0QdBg3hmKPfj78aEj9dA/pubhtml?gid=0&amp;single=true&amp;range=A6:G12&amp;widget=true&amp;headers=false" width="400" height="250"></iframe>
   </div>
 
-  <script>
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyNewNnTJmbR8hvLKJJQNLiXKB1oDzXmQjsOfIPSN3qMqmGj1BuG-lI7fvqttLvOBht/exec';
-    const REFRESH_MS = 500;
+  <!-- Charts Container -->
+  <div class="charts">
+    <div class="chart-container">
+      <h4>Beer Number Statistics</h4>
+      <canvas id="beerStatsChart"></canvas>
+    </div>
 
-    async function fetchData() {
-      try {
-        const res = await fetch(APPS_SCRIPT_URL);
-        const j = await res.json();
-        if (j.error) {
-          console.error('Apps Script error:', j.error);
-          showError(j.error);
-          return;
-        }
-        render(j.rows || j);
-      } catch (err) {
-        console.error(err);
-        showError(err && err.message ? err.message : String(err));
-      }
+    <div class="chart-container">
+      <h4>Beer Leaderboard</h4>
+      <canvas id="leaderboardChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+      <h4>Contribution Pie Chart</h4>
+      <canvas id="contributionPieChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+      <h4>Pyramid Fill Progress</h4>
+      <canvas id="pyramidProgressBar"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyNewNnTJmbR8hvLKJJQNLiXKB1oDzXmQjsOfIPSN3qMqmGj1BuG-lI7fvqttLvOBht/exec';
+  const REFRESH_MS = 100;
+
+  const beerStatsCtx = document.getElementById('beerStatsChart').getContext('2d');
+  const leaderboardCtx = document.getElementById('leaderboardChart').getContext('2d');
+  const pieCtx = document.getElementById('contributionPieChart').getContext('2d');
+  const progressCtx = document.getElementById('pyramidProgressBar').getContext('2d');
+
+  let beerStatsChart = new Chart(beerStatsCtx, {
+    type: 'bar',
+    data: { labels: [], datasets: [{ label: 'Beers Reserved', data: [], backgroundColor: 'rgba(54,162,235,0.5)' }] },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+
+  let leaderboardChart = new Chart(leaderboardCtx, {
+    type: 'bar',
+    data: { labels: [], datasets: [{ label: 'Beers', data: [], backgroundColor: 'rgba(255,159,64,0.5)' }] },
+    options: { responsive: true, indexAxis: 'y', scales: { x: { beginAtZero: true } } }
+  });
+
+  let contributionPieChart = new Chart(pieCtx, {
+    type: 'pie',
+    data: { labels: [], datasets: [{ label: 'Contributions', data: [], backgroundColor: ['#4BC0C0','#FF6384','#FFCE56','#36A2EB','#9966FF'] }] }
+  });
+
+  let pyramidProgressBar = new Chart(progressCtx, {
+    type: 'bar',
+    data: { labels: ['Fill Progress'], datasets: [{ data: [0], backgroundColor: 'rgba(75, 192, 192, 0.8)' }] },
+    options: { indexAxis: 'y', scales: { x: { max: 28 } } }
+  });
+
+  async function fetchData() {
+    try {
+      const res = await fetch(APPS_SCRIPT_URL);
+      const json = await res.json();
+      
+      const rows = json.rows;
+
+      let flattened = rows.flat().filter(e => e && e.trim() !== '' && e.trim().toLowerCase() !== 'enter name');
+
+      let counts = flattened.reduce((acc, name) => {
+        acc[name] = (acc[name] || 0) + 1;
+        return acc;
+      }, {});
+
+      const labels = Object.keys(counts);
+      const data = Object.values(counts);
+      
+      // Beer Stats (simple numbers)
+      beerStatsChart.data.labels = labels;
+      beerStatsChart.data.datasets[0].data = data;
+      beerStatsChart.update();
+
+      // Leaderboard: Sorted by number of beers
+      let sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+      leaderboardChart.data.labels = sorted.map(e=>e[0]);
+      leaderboardChart.data.datasets[0].data = sorted.map(e=>e[1]);
+      leaderboardChart.update();
+
+      // Pie chart: Same data
+      contributionPieChart.data.labels = labels;
+      contributionPieChart.data.datasets[0].data = data;
+      contributionPieChart.update();
+
+      // Pyramid Fill Progress
+      pyramidProgressBar.data.datasets[0].data = [flattened.length];
+      pyramidProgressBar.update();
+
+    } catch (err) {
+      console.error('Error:', err);
     }
+  }
 
-    function showError(msg) {
-      const el = document.getElementById('pyramid');
-      el.innerHTML = '<div style="color:#b00">Error: '+msg+'</div>';
-    }
+  fetchData();
+  setInterval(fetchData, REFRESH_MS);
+</script>
 
-    function render(rows) {
-      const container = document.getElementById('pyramid');
-      container.innerHTML = '';
-      rows.forEach(row => {
-        const rowEl = document.createElement('div');
-        rowEl.className = 'row';
-        row.forEach(cell => {
-          const s = document.createElement('div');
-          s.className = 'slot' + ((cell||'').trim() ? '' : ' empty');
-          s.textContent = (cell && cell.trim()) ? cell : 'Enter Name';
-          rowEl.appendChild(s);
-        });
-        container.appendChild(rowEl);
-      });
-    }
-
-    fetchData();
-    setInterval(fetchData, REFRESH_MS);
-  </script>
 </body>
 </html>
