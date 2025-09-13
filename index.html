@@ -3,38 +3,46 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>🍺 Beer Pyramid</title>
+  <title>Beer Pyramid Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: system-ui, Arial; margin: 24px; background:#f9f9f9; }
     .container { display: flex; flex-direction: row; gap: 40px; }
     .sheet { flex: 1; }
     .charts { flex: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-    iframe { border: 1px solid #ccc; }
-    .chart-container { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 0 8px rgba(0,0,0,0.1); }
+    .chart-container, .table-container, .progress-container { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 0 8px rgba(0,0,0,0.1); }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+    .leaderboard-entry { display: flex; justify-content: space-between; padding: 8px; border-radius: 4px; margin-bottom: 8px; }
+    .leaderboard-entry.first { background-color: #ccffcc; }
+    .leaderboard-entry.second { background-color: #ffe0b2; }
+    .leaderboard-entry.third { background-color: #ffff99; }
   </style>
 </head>
 <body>
 
-<h1>🍻 Beer Pyramid</h1>
+<h1><center>🍻 Beer Pyramid</center></h1>
 <div class="container">
 
-  <!-- Embedded Google Sheets Editable Pyramid Slots -->
   <div class="sheet">
     <h3>Edit Pyramid Slots</h3>
-    <iframe src="https://docs.google.com/spreadsheets/d/e/1uJchihmrhkQGgbjbIWAesfE0QdBg3hmKPfj78aEj9dA/pubhtml?gid=0&amp;single=true&amp;range=A6:G12&amp;widget=true&amp;headers=false" width="400" height="250"></iframe>
+    <iframe src="https://docs.google.com/spreadsheets/d/e/2PACX-1vSfN01MuNn0le_rMHQmvZyAdC8MwmWeznNjigIFXlquWuLRO3BxbrPmtQvzf_wVJ6nvUAnot4nZLGy/pubhtml?widget=true&amp;headers=false" width="400" height="250"></iframe>
   </div>
 
-  <!-- Charts Container -->
   <div class="charts">
-    <div class="chart-container">
+
+    <div class="chart-container table-container">
       <h4>Beer Number Statistics</h4>
-      <canvas id="beerStatsChart"></canvas>
+      <table id="statsTable">
+        <thead><tr><th>Name</th><th>Beers Reserved</th></tr></thead>
+        <tbody></tbody>
+      </table>
     </div>
 
     <div class="chart-container">
       <h4>Beer Leaderboard</h4>
-      <canvas id="leaderboardChart"></canvas>
+      <div id="leaderboard"></div>
     </div>
 
     <div class="chart-container">
@@ -42,10 +50,12 @@
       <canvas id="contributionPieChart"></canvas>
     </div>
 
-    <div class="chart-container">
+    <div class="chart-container progress-container">
       <h4>Pyramid Fill Progress</h4>
-      <canvas id="pyramidProgressBar"></canvas>
+      <progress id="fillProgress" value="0" max="28" style="width: 100%; height: 24px;"></progress>
+      <div id="progressText" style="text-align:center; margin-top:8px;">0 / 28 filled</div>
     </div>
+
   </div>
 
 </div>
@@ -54,32 +64,10 @@
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyNewNnTJmbR8hvLKJJQNLiXKB1oDzXmQjsOfIPSN3qMqmGj1BuG-lI7fvqttLvOBht/exec';
   const REFRESH_MS = 100;
 
-  const beerStatsCtx = document.getElementById('beerStatsChart').getContext('2d');
-  const leaderboardCtx = document.getElementById('leaderboardChart').getContext('2d');
   const pieCtx = document.getElementById('contributionPieChart').getContext('2d');
-  const progressCtx = document.getElementById('pyramidProgressBar').getContext('2d');
-
-  let beerStatsChart = new Chart(beerStatsCtx, {
-    type: 'bar',
-    data: { labels: [], datasets: [{ label: 'Beers Reserved', data: [], backgroundColor: 'rgba(54,162,235,0.5)' }] },
-    options: { responsive: true, scales: { y: { beginAtZero: true } } }
-  });
-
-  let leaderboardChart = new Chart(leaderboardCtx, {
-    type: 'bar',
-    data: { labels: [], datasets: [{ label: 'Beers', data: [], backgroundColor: 'rgba(255,159,64,0.5)' }] },
-    options: { responsive: true, indexAxis: 'y', scales: { x: { beginAtZero: true } } }
-  });
-
   let contributionPieChart = new Chart(pieCtx, {
     type: 'pie',
     data: { labels: [], datasets: [{ label: 'Contributions', data: [], backgroundColor: ['#4BC0C0','#FF6384','#FFCE56','#36A2EB','#9966FF'] }] }
-  });
-
-  let pyramidProgressBar = new Chart(progressCtx, {
-    type: 'bar',
-    data: { labels: ['Fill Progress'], datasets: [{ data: [0], backgroundColor: 'rgba(75, 192, 192, 0.8)' }] },
-    options: { indexAxis: 'y', scales: { x: { max: 28 } } }
   });
 
   async function fetchData() {
@@ -88,36 +76,44 @@
       const json = await res.json();
       
       const rows = json.rows;
-
-      let flattened = rows.flat().filter(e => e && e.trim() !== '' && e.trim().toLowerCase() !== 'enter name');
-
-      let counts = flattened.reduce((acc, name) => {
+      const flattened = rows.flat().filter(e => e && e.trim() !== '' && e.trim().toLowerCase() !== 'enter name');
+      const counts = flattened.reduce((acc, name) => {
         acc[name] = (acc[name] || 0) + 1;
         return acc;
       }, {});
-
-      const labels = Object.keys(counts);
-      const data = Object.values(counts);
       
-      // Beer Stats (simple numbers)
-      beerStatsChart.data.labels = labels;
-      beerStatsChart.data.datasets[0].data = data;
-      beerStatsChart.update();
+      const totalFilled = flattened.length;
 
-      // Leaderboard: Sorted by number of beers
-      let sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
-      leaderboardChart.data.labels = sorted.map(e=>e[0]);
-      leaderboardChart.data.datasets[0].data = sorted.map(e=>e[1]);
-      leaderboardChart.update();
+      // Stats Table
+      const statsBody = document.querySelector('#statsTable tbody');
+      statsBody.innerHTML = '';
+      Object.entries(counts).forEach(([name, cnt]) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${name}</td><td>${cnt}</td>`;
+        statsBody.appendChild(tr);
+      });
 
-      // Pie chart: Same data
-      contributionPieChart.data.labels = labels;
-      contributionPieChart.data.datasets[0].data = data;
+      // Leaderboard
+      const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+      const leaderboardEl = document.getElementById('leaderboard');
+      leaderboardEl.innerHTML = '';
+      sorted.forEach(([name, cnt], i) => {
+        const entry = document.createElement('div');
+        entry.className = 'leaderboard-entry ' + (i===0?'first':i===1?'second':i===2?'third':'');
+        entry.innerHTML = `<span>#${i+1} ${name}</span><span>${cnt}</span>`;
+        leaderboardEl.appendChild(entry);
+      });
+
+      // Pie Chart
+      contributionPieChart.data.labels = Object.keys(counts);
+      contributionPieChart.data.datasets[0].data = Object.values(counts);
       contributionPieChart.update();
 
-      // Pyramid Fill Progress
-      pyramidProgressBar.data.datasets[0].data = [flattened.length];
-      pyramidProgressBar.update();
+      // Progress Bar
+      const progressEl = document.getElementById('fillProgress');
+      const progressTextEl = document.getElementById('progressText');
+      progressEl.value = totalFilled;
+      progressTextEl.textContent = `${totalFilled} / 28 slots filled`;
 
     } catch (err) {
       console.error('Error:', err);
