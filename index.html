@@ -5,70 +5,325 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Beer Pyramid Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
   <style>
-    body { font-family: system-ui, Arial; margin: 24px; background:#f9f9f9; }
-    .container { display: flex; flex-direction: row; gap: 40px; }
-    .sheet { flex: 1; }
-    .charts { flex: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-    .chart-container, .table-container, .progress-container { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 0 8px rgba(0,0,0,0.1); }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      margin: 24px; 
+      background:#f9f9f9; 
+    }
 
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-    .leaderboard-entry { display: flex; justify-content: space-between; padding: 8px; border-radius: 4px; margin-bottom: 8px; }
-    .leaderboard-entry.first { background-color: #ccffcc; }
-    .leaderboard-entry.second { background-color: #ffe0b2; }
-    .leaderboard-entry.third { background-color: #ffff99; }
+    /* Background image overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: url('bullet.jpeg'); /* Replace with your image URL */
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      opacity: 0.2; /* Adjust this value to make it more/less faded (0.05 - 0.3) */
+      z-index: -1; /* Puts it behind all content */
+      pointer-events: none; /* Prevents it from interfering with clicks */
+    }
+
+    h1 {
+      font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 4.5em;
+      margin-top: -20px;
+    }
+
+    p {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 1em;
+      margin: 0;
+      margin-bottom: 12px;
+      text-align: justify;
+    }
+
+    p strong {
+      color: orange;
+    }
+
+    .subtitle {
+      font-family: 'segoe ui', tahoma, geneva, verdana, sans-serif;
+      font-size: 1em;
+      margin-top: -36px;
+      margin-bottom: 24px;
+      font-style: italic;
+    }
+
+    .container { 
+      width: 100%;
+      display: flex; 
+      flex-direction: column; 
+      justify-content: center;
+      align-items: center;
+      gap: 100px; 
+    }
+
+    .container-2 {
+      width: 100%;
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: start;
+    }
+
+    .sheet { 
+      width: 100%;
+      height: 100%;
+    }
+
+    .charts {  
+      width: 100%;
+      display: flex; 
+      flex-direction: column;
+      justify-content: center;
+      align-items: center; 
+      gap: 24px;
+      margin-top: -50px;
+    }
+
+    .charts-2 {
+      width: 100%;
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: stretch;
+      gap: 36px;
+    }
+
+    /* Create a column for stats and progress - takes more space */
+    .left-column {
+      display: flex;
+      flex: 2;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Pie chart takes less space */
+    .pie-chart-column {
+      display: flex;
+      flex: 1;
+      align-items: stretch;
+      max-height: 350px;
+    }
+
+    .chart-container, .table-container, .progress-container { 
+      background: #fff; 
+      padding: 16px; 
+      border-radius: 8px; 
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+
+    /* Size the pie chart container to fit content, not stretch */
+    .pie-chart-column .chart-container {
+      aspect-ratio: 1; /* Keep it square */
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Ensure the canvas fits within its container */
+    .pie-chart-column .chart-container canvas {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto !important;
+      height: auto !important;
+    }
+
+    /* Ensure stats container and progress container fill their column width */
+    .left-column .chart-container,
+    .left-column .progress-container {
+      width: 100%;
+    }
+
+    /* Ensure the canvas and progress elements fill available space */
+    .chart-container canvas {
+      flex: 1;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .chart-container h4 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      flex-shrink: 0; /* Prevent the title from shrinking */
+    }
+
+    .progress-container progress {
+      margin-top: auto; /* Push progress bar to bottom if needed */
+    }
+
+    .stats-container table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 16px;
+      flex: 1; /* Allow table to grow and fill space */
+    }
+
+    .stats-container td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+    }
+
+    th, td { 
+      padding: 8px; 
+      text-align: left; 
+      border-bottom: 1px solid #ddd; 
+    }
+
+    #leaderboard table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    #leaderboard th, #leaderboard td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    #leaderboard tr.first {
+      background-color: #ccffcc;
+    }
+
+    #leaderboard tr.second {
+      background-color: #ffe0b2;
+    }
+
+    #leaderboard tr.third {
+      background-color: #ffff99;
+    }
+
+    body::-webkit-scrollbar {
+      width: 0.5em;
+    }
+
+    body::-webkit-scrollbar-track {
+      -webkit-box-shadow: inset 0 0 6px white;
+    }
+
+    body::-webkit-scrollbar-thumb {
+      background-color: white;
+    }
   </style>
 </head>
 <body>
 
-<h1><center>🍻 Beer Pyramid</center></h1>
+<h1><center>🍺 Beer Pyramid 🍺</center></h1>
+<div class="subtitle"><center>Organized and Managed by Satvik Agrawal and Nishant Verma, as a not-for-profit social initiative.</center></div>
 <div class="container">
-
-  <div class="sheet">
-    <h3>Edit Pyramid Slots</h3>
-<!--     <iframe src="https://docs.google.com/spreadsheets/d/e/2PACX-1vSfN01MuNn0le_rMHQmvZyAdC8MwmWeznNjigIFXlquWuLRO3BxbrPmtQvzf_wVJ6nvUAnot4nZLGy/pubhtml?widget=true&amp;headers=false" width="400" height="250"></iframe> -->
-    <iframe src="https://docs.google.com/spreadsheets/d/1uJchihmrhkQGgbjbIWAesfE0QdBg3hmKPfj78aEj9dA/edit?rm=minimal&gid=759314443" width="800" height="400"></iframe>
+  <div class="sheet" style="margin-bottom: 10px;">
+    <div class="container-2">
+      <div style="width: 1600px; height: 275px; margin-right: 24px;">
+        <iframe src="https://docs.google.com/spreadsheets/d/1uJchihmrhkQGgbjbIWAesfE0QdBg3hmKPfj78aEj9dA/edit?rm=minimal&gid=759314443"
+          width="100%" height="100%" frameborder="0">
+        </iframe>
+      </div>
+      <p>
+        Kindly enter your name into below-formatted 7-tier beer pyramid slots.<br>You are encouraged to reserve multiple beers.<br>
+        If base 7 tiers are found filled, you are encouraged to format additional tiers into the pyramid.<br><br>
+        <strong>STANDARD BEER: BULLET 500 ML CAN (Rs. 100)</strong><br>
+        Custom Beers are entertained, however beer should be supportive of pyramid structure. Cans are encouraged.<br>
+        Kindly RSVP Custom Beer by mentioning brand and size in your reserved slot.
+      </p>
+    </div>
   </div>
-  
-  <div class="charts">
 
-    <div class="chart-container table-container">
-      <h4>Beer Number Statistics</h4>
-      <table id="statsTable">
-        <thead><tr><th>Name</th><th>Beers Reserved</th></tr></thead>
-        <tbody></tbody>
-      </table>
+  <div class="charts">
+    <div class="charts-2">
+      <!-- LEFT COLUMN: Stats and Progress -->
+      <div class="left-column">
+        <!-- BEER OVERALL STATISTICS -->
+        <div class="chart-container stats-container">
+          <table id="statsTable">
+            <tbody>
+              <tr><td><strong>Capacity</strong></td><td id="capacity">28</td></tr>
+              <tr><td><strong>Slots Used</strong></td><td id="slotsUsed">0</td></tr>
+              <tr><td><strong>Total Cost (₹)</strong></td><td id="totalCost">0</td></tr>
+              <tr><td><strong>Remaining Slots</strong></td><td id="remainingSlots">28</td></tr>
+              <tr><td><strong>Total Beer (L)</strong></td><td id="totalBeer">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- BEER PROGRESS BAR -->
+        <div class="chart-container progress-container">
+          <h4><center>Pyramid Fill Progress:</center></h4>
+          <progress id="fillProgress" value="0" max="28" style="width: 100%; height: 24px;"></progress>
+          <!-- <div id="progressText" style="text-align:center; margin-top:8px;">0 / 28 filled</div> -->
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN: Pie Chart -->
+      <div class="pie-chart-column">
+        <div class="chart-container">
+          <!-- <h4>Contribution Pie Chart</h4> -->
+          <canvas id="contributionPieChart"></canvas>
+        </div>
+      </div>
+
     </div>
 
     <div class="chart-container">
-      <h4>Beer Leaderboard</h4>
+      <h4><center>Beer Leaderboard</center></h4>
       <div id="leaderboard"></div>
     </div>
-
-    <div class="chart-container">
-      <h4>Contribution Pie Chart</h4>
-      <canvas id="contributionPieChart"></canvas>
-    </div>
-
-    <div class="chart-container progress-container">
-      <h4>Pyramid Fill Progress</h4>
-      <progress id="fillProgress" value="0" max="28" style="width: 100%; height: 24px;"></progress>
-      <div id="progressText" style="text-align:center; margin-top:8px;">0 / 28 filled</div>
-    </div>
-
   </div>
 
 </div>
 
 <script>
-  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyNewNnTJmbR8hvLKJJQNLiXKB1oDzXmQjsOfIPSN3qMqmGj1BuG-lI7fvqttLvOBht/exec';
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxQsx2_gsp-TNd0o8YksHJBB6AYvzzHbr2vmIlNnoT6fQIqsd9YWbV5baSlrsU-fGiC/exec';
   const REFRESH_MS = 100;
+
+  
+  const CAPACITY = 28;
+  const COST_PER_BEER = 100;
 
   const pieCtx = document.getElementById('contributionPieChart').getContext('2d');
   let contributionPieChart = new Chart(pieCtx, {
     type: 'pie',
-    data: { labels: [], datasets: [{ label: 'Contributions', data: [], backgroundColor: ['#4BC0C0','#FF6384','#FFCE56','#36A2EB','#9966FF'] }] }
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Contributions',
+        data: [],
+        backgroundColor: ['#4BC0C0','#FF6384','#FFCE56','#36A2EB','#9966FF']
+      }]
+    },
+    options: {
+      plugins: {
+        datalabels: {
+          color: '#fff',
+          formatter: (value, ctx) => {
+            const label = ctx.chart.data.labels[ctx.dataIndex];
+            return label;
+          },
+          font: {
+            weight: 'bold',
+            size: 14
+          }
+        },
+        legend: {
+          display: false  // Hide the default legend since we have labels on slices
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
   });
 
   async function fetchData() {
@@ -86,24 +341,51 @@
       const totalFilled = flattened.length;
 
       // Stats Table
-      const statsBody = document.querySelector('#statsTable tbody');
-      statsBody.innerHTML = '';
-      Object.entries(counts).forEach(([name, cnt]) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${name}</td><td>${cnt}</td>`;
-        statsBody.appendChild(tr);
-      });
+      // const statsBody = document.querySelector('#statsTable tbody');
+      // statsBody.innerHTML = '';
+      // Object.entries(counts).forEach(([name, cnt]) => {
+      //   const tr = document.createElement('tr');
+      //   tr.innerHTML = `<td>${name}</td><td>${cnt}</td>`;
+      //   statsBody.appendChild(tr);
+      // });
+
+      const totalUsed = flattened.length;
+      const remainingSlots = CAPACITY - totalUsed;
+      const totalCost = totalUsed * COST_PER_BEER;
+      const totalBeerLitres = (totalUsed * 500) / 1000;
+
+      // Update Stats Table
+      document.getElementById('capacity').textContent = CAPACITY;
+      document.getElementById('slotsUsed').textContent = totalUsed;
+      document.getElementById('totalCost').textContent = totalCost;
+      document.getElementById('remainingSlots').textContent = remainingSlots;
+      document.getElementById('totalBeer').textContent = totalBeerLitres.toFixed(1);
 
       // Leaderboard
       const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
       const leaderboardEl = document.getElementById('leaderboard');
-      leaderboardEl.innerHTML = '';
-      sorted.forEach(([name, cnt], i) => {
-        const entry = document.createElement('div');
-        entry.className = 'leaderboard-entry ' + (i===0?'first':i===1?'second':i===2?'third':'');
-        entry.innerHTML = `<span>#${i+1} ${name}</span><span>${cnt}</span>`;
-        leaderboardEl.appendChild(entry);
-      });
+      leaderboardEl.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Position</th>
+              <th>Name</th>
+              <th>Beers</th>
+              <th>Cost (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map(([name, cnt], i) => `
+              <tr class="${i===0?'first':i===1?'second':i===2?'third':''}">
+                <td>${i + 1}</td>
+                <td>${name}</td>
+                <td>${cnt}</td>
+                <td>${cnt * COST_PER_BEER}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
 
       // Pie Chart
       contributionPieChart.data.labels = Object.keys(counts);
@@ -114,7 +396,7 @@
       const progressEl = document.getElementById('fillProgress');
       const progressTextEl = document.getElementById('progressText');
       progressEl.value = totalFilled;
-      progressTextEl.textContent = `${totalFilled} / 28 slots filled`;
+      // progressTextEl.textContent = `${totalFilled} / 28 slots filled`;
 
     } catch (err) {
       console.error('Error:', err);
